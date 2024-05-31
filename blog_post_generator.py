@@ -46,6 +46,9 @@ def get_current_time():
 def capitalize_categories(categories):
     return [cat.strip().title() for cat in categories.split(',')]
 
+def validate_title(title):
+    return re.match("^[A-Za-z0-9 _-]+$", title) is not None
+
 def generate_post(title, author, date, url, categories, tags, thumbnail_image, additional_images, content, output_path):
     categories_str = "\n  - ".join(categories)
     tags_str = "\n  - ".join(tags)
@@ -191,6 +194,12 @@ def load_post():
 
 def create_post(output_path=None, date=None):
     title = title_entry.get().strip()
+    
+    # Validate title
+    if not validate_title(title):
+        messagebox.showerror("Invalid Title", "Title contains invalid characters. Only alphanumeric characters, spaces, hyphens, and underscores are allowed.")
+        return
+    
     source_path = source_entry.get().strip()
 
     if not title and source_path:
@@ -207,49 +216,8 @@ def create_post(output_path=None, date=None):
         title = "no-title-" + random_string()
         content = content_text.get("1.0", tk.END).strip()
     else:
-        content = content_text.get("1.0", tk.END).strip()
+        content
 
-    author = config["author"]
-    if not date:
-        date = get_current_time()
-    url = f"/{datetime.datetime.now().strftime('%Y/%m/%d')}/{title.lower().replace(' ', '-')}/"
-
-    categories_input = categories_entry.get().strip()
-    categories = capitalize_categories(categories_input)
-
-    tags_input = tags_entry.get().strip()
-    tags = capitalize_categories(tags_input)
-
-    thumbnail_image = thumbnail_entry.get().strip()
-    if not thumbnail_image:
-        thumbnail_image = "default-thumbnail.png"
-    else:
-        thumbnail_image = os.path.join(config["image_dir"], thumbnail_image)
-
-    # Check for unreferenced images
-    unreferenced_images = [img for img in additional_images if f"/img/{os.path.basename(img)}" not in content]
-    if unreferenced_images:
-        if not messagebox.askyesno("Unreferenced Images", f"There are unreferenced images: {', '.join([os.path.basename(img) for img in unreferenced_images])}. Do you want to continue?"):
-            return
-
-    # Check if the thumbnail image has changed and delete the original if necessary
-    if output_path and os.path.exists(output_path):
-        with open(output_path, 'r') as file:
-            existing_content = file.read()
-        existing_front_matter, _ = existing_content.split('---', 2)[1:3]
-        existing_front_matter = yaml.safe_load(existing_front_matter)
-        existing_thumbnail = existing_front_matter.get('thumbnailImage', '').replace('/img/', '')
-        if existing_thumbnail and existing_thumbnail != os.path.basename(thumbnail_image):
-            existing_thumbnail_path = os.path.join(config["image_dir"], existing_thumbnail)
-            if os.path.exists(existing_thumbnail_path):
-                if messagebox.askyesno("Delete Thumbnail Image", f"The original thumbnail image {existing_thumbnail} will be deleted. Do you want to proceed?"):
-                    os.remove(existing_thumbnail_path)
-
-    output_filename = f"{datetime.datetime.now().strftime('%Y-%m-%d')}-{title.lower().replace(' ', '-')}.md"
-    if not output_path:
-        output_path = os.path.join(config["output_dir"], output_filename)
-
-    generate_post(title, author, date, url, categories, tags, thumbnail_image, additional_images, content, output_path)
 
 def main():
     global title_entry, source_entry, categories_entry, tags_entry, thumbnail_entry, content_text, image_listbox, generate_button, additional_images
