@@ -1,5 +1,6 @@
 # Ignore personal settings
 blog_post_generator_config.json
+config.ini
 
 # Ignore virtual environment
 .venv
