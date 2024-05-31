@@ -159,25 +159,25 @@ def load_post():
     if post_path:
         with open(post_path, 'r') as file:
             content = file.read()
-        
+
         front_matter, post_content = content.split('---', 2)[1:3]
         front_matter = yaml.safe_load(front_matter)
-        
+
         title_entry.delete(0, tk.END)
         title_entry.insert(0, front_matter.get('title', ''))
-        
+
         categories_entry.delete(0, tk.END)
         categories_entry.insert(0, ', '.join(front_matter.get('categories', [])))
-        
+
         tags_entry.delete(0, tk.END)
         tags_entry.insert(0, ', '.join(front_matter.get('tags', [])))
-        
+
         thumbnail_entry.delete(0, tk.END)
         thumbnail_entry.insert(0, front_matter.get('thumbnailImage', '').replace('/img/', ''))
-        
+
         additional_images.clear()
         image_listbox.delete(0, END)
-        
+
         content_text.delete("1.0", tk.END)
         content_text.insert(tk.END, post_content.strip())
 
@@ -188,18 +188,18 @@ def load_post():
             if img_path not in additional_images:
                 additional_images.append(img_path)
                 image_listbox.insert(END, img)
-        
+
         generate_button.config(text="Update Post")
         generate_button.config(command=lambda: create_post(post_path, date=front_matter.get('date')))
 
 def create_post(output_path=None, date=None):
     title = title_entry.get().strip()
-    
+
     # Validate title
     if not validate_title(title):
         messagebox.showerror("Invalid Title", "Title contains invalid characters. Only alphanumeric characters, spaces, hyphens, and underscores are allowed.")
         return
-    
+
     source_path = source_entry.get().strip()
 
     if not title and source_path:
@@ -224,7 +224,7 @@ def main():
 
     root = tk.Tk()
     root.title("Blog Post Generator")
-    root.geometry("880x655")  # Set fixed size for the window
+    root.geometry("850x550")  # Set fixed size for the window
     root.resizable(False, False)  # Disable resizing
 
     tk.Label(root, text="Title:").grid(row=0, column=0, sticky=tk.W)
@@ -262,13 +262,13 @@ def main():
     image_listbox.grid(row=7, column=1, padx=10, pady=5)
 
     tk.Button(root, text="Insert Image Reference", command=lambda: insert_image_reference(content_text, image_listbox)).grid(row=8, column=1, padx=10, pady=5)
-    
+
     load_button = tk.Button(root, text="Load Post", command=load_post)
-    generate_button = tk.Button(root, text="Generate Post", command=create_post)
     load_button.grid(row=9, column=1, padx=10, pady=10, sticky=tk.E)
+    generate_button = tk.Button(root, text="Generate Post", command=create_post)
     generate_button.grid(row=9, column=2, padx=10, pady=10, sticky=tk.E)
 
-    tk.Button(root, text="Configure Settings", command=configure_settings).grid(row=10, column=0, padx=10, pady=10, sticky=tk.W)
+    tk.Button(root, text="Configure Settings", command=configure_settings).grid(row=9, column=0, padx=10, pady=10, sticky=tk.W)
 
     root.mainloop()
 
