@@ -224,7 +224,7 @@ def main():
 
     root = tk.Tk()
     root.title("Blog Post Generator")
-    root.geometry("850x550")  # Set fixed size for the window
+    root.geometry("875x575")  # Set fixed size for the window
     root.resizable(False, False)  # Disable resizing
 
     tk.Label(root, text="Title:").grid(row=0, column=0, sticky=tk.W)
