@@ -14,11 +14,9 @@ pushover_enabled = config["DEFAULT"].getboolean("UsePushover", True)
 YNAB_ACCESS_TOKEN = config["DEFAULT"]["YNABAccessToken"]
 # Replace with your budget ID
 BUDGET_ID = config["DEFAULT"]["BudgetID"]
-# Replace with your Groceries category ID
-GROCERIES_CATEGORY_ID = config["CategoryIDs"]["Groceries"]
 
-# Threshold for spending
-THRESHOLD = 6000
+# Category IDs to check
+CATEGORY_IDS = list(config["CategoryIDs"].values())
 
 # YNAB API URL
 BASE_URL = f'https://api.youneedabudget.com/v1/budgets/{BUDGET_ID}'
@@ -28,12 +26,9 @@ headers = {
     'Authorization': f'Bearer {YNAB_ACCESS_TOKEN}'
 }
 
-def get_transactions():
-    # Get the current year
-    current_year = datetime.datetime.now().year
-
-    # API endpoint to get transactions
-    endpoint = f'{BASE_URL}/transactions?since_date={current_year}-01-01'
+def get_category_balances():
+    # API endpoint to get categories
+    endpoint = f'{BASE_URL}/categories'
 
     # Make the request to YNAB API
     response = requests.get(endpoint, headers=headers)
@@ -42,18 +37,16 @@ def get_transactions():
     if response.status_code != 200:
         raise Exception(f"Error: {response.status_code} - {response.json()}")
 
-    transactions = response.json()['data']['transactions']
-    return transactions
+    categories = response.json()['data']['category_groups']
+    return categories
 
-def calculate_groceries_spent(transactions):
-    total_spent = 0
-    for transaction in transactions:
-        if transaction['category_id'] == GROCERIES_CATEGORY_ID:
-            total_spent += transaction['amount']
-
-    # YNAB amounts are in milliunits, so divide by 1000 to get the actual amount
-    total_spent = total_spent / 1000
-    return total_spent
+def filter_balances_by_category(categories):
+    balances = {}
+    for group in categories:
+        for category in group['categories']:
+            if category['id'] in CATEGORY_IDS:
+                balances[category['name']] = category['balance'] / 1000  # Convert from milliunits
+    return balances
 
 def send_pushover_message(message, title):
     pushover_token = config["DEFAULT"]["PushoverToken"]
@@ -64,14 +57,24 @@ def send_pushover_message(message, title):
     user.send_message(message, title=title)
 
 def main():
-    transactions = get_transactions()
-    total_groceries_spent = calculate_groceries_spent(transactions)
-    print(f"Total spent on groceries in the current year: ${total_groceries_spent*-1:.2f}")
+    categories = get_category_balances()
+    balances = filter_balances_by_category(categories)
 
-    if pushover_enabled and total_groceries_spent*-1 > THRESHOLD:
-        message = f"Spending on groceries has exceeded ${THRESHOLD}. Total spent: ${total_groceries_spent*-1:.2f}"
+    # Get the current date
+    current_date = datetime.datetime.now().date()
+
+    # Format the date as mm/dd/yyyy
+    formatted_date = current_date.strftime("%m/%d/%Y")
+
+    message = "Available balances:\n"
+    for category, balance in balances.items():
+        message += f"{category}: ${balance:.2f}\n"
+
+    print(message)
+
+    if pushover_enabled:
         try:
-            send_pushover_message(message, "YNAB Grocery Spending Surpasses Threshold")
+            send_pushover_message(message, f"YNAB Update {formatted_date}")
         except Exception as e:
             print(f"Error sending Pushover notification: {e}")
 
