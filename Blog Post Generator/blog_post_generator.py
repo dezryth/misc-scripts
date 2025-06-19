@@ -46,6 +46,7 @@ def load_config():
 def save_config(config):
     with open(config_file_path, 'w') as f:
         json.dump(config, f, indent=4)
+    clear_main_form_fields()  # Clear fields after saving config
 
 # Global configuration
 config = load_config()
@@ -97,7 +98,7 @@ heroImage: ../../assets/{os.path.basename(featured_image)}
 ---
 {content}
 """
-    with open(output_path, 'w') as file:
+    with open(output_path, 'w', encoding='utf-8') as file:
         file.write(post_content)
 
     # Copy images to the img directory
@@ -106,16 +107,23 @@ heroImage: ../../assets/{os.path.basename(featured_image)}
         os.makedirs(img_dir)
 
     for image_path in [featured_image] + additional_images:
+        # Check if image is already at destination (editing existing post)
+        image_path_without_drive = os.path.splitdrive(image_path)[1]  # Remove drive letter
+        if active_config.get("relative_asset_path", "") in image_path_without_drive:
+            messagebox.showerror("Error", f"Image file already present at destination: {image_path}")
+            continue
         # Ensure the path is not empty
         if not os.path.exists(image_path):
             messagebox.showerror("Error", f"Image file not found: {image_path}")
             continue
+
         target_path = os.path.join(img_dir, os.path.basename(image_path))
         with open(image_path, 'rb') as src_file:
             with open(target_path, 'wb') as dest_file:
                 dest_file.write(src_file.read())
 
-    messagebox.showinfo("Success", f"Post generated at {output_path}")
+    messagebox.showinfo("Success", f"Post created (or updated) at {output_path}")
+    update_status("POSTED")
 
 def select_source_file(entry):
     file_path = filedialog.askopenfilename()
@@ -184,17 +192,20 @@ def configure_settings():
         settings_window.destroy()
 
     def update_fields(*args):
+        # Clear and populate settings fields
+        type_entry.delete(0, tk.END)
+        author_entry.delete(0, tk.END)
+        post_dir_entry.delete(0, tk.END)
+        image_dir_entry.delete(0, tk.END)
+        relative_asset_path_entry.delete(0, tk.END)
+
+        # Populate fields with the selected profile's data
         selected_profile = profile_var.get()
         profile_config = config["profiles"].get(selected_profile, {})
-        type_entry.delete(0, tk.END)
         type_entry.insert(0, profile_config.get("type", "hugo"))  # Default to "hugo"
-        author_entry.delete(0, tk.END)
         author_entry.insert(0, profile_config.get("author", ""))
-        post_dir_entry.delete(0, tk.END)
         post_dir_entry.insert(0, profile_config.get("output_dir", ""))
-        image_dir_entry.delete(0, tk.END)
         image_dir_entry.insert(0, profile_config.get("image_dir", ""))
-        relative_asset_path_entry.delete(0, tk.END)
         relative_asset_path_entry.insert(0, profile_config.get("relative_asset_path", "img/"))  # Default to "img/"
 
     settings_window = Toplevel()
@@ -228,16 +239,17 @@ def configure_settings():
     relative_asset_path_entry = Entry(settings_window, width=50)
     relative_asset_path_entry.grid(row=5, column=1, padx=10, pady=5)
 
-    Button(settings_window, text="Save", command=save_settings).grid(row=6, column=1, pady=10)
+    Button(settings_window, text="Save", command=lambda: [save_settings(), update_active_profile_label()]).grid(row=6, column=1, pady=10)
 
     # Initialize fields with the active profile's data
     update_fields()
 
 def load_post():
     active_config = get_active_profile_config()
-    post_path = filedialog.askopenfilename(filetypes=[("Markdown files", "*.md")])
+    initial_dir = active_config.get("output_dir", os.getcwd())
+    post_path = filedialog.askopenfilename(initialdir=initial_dir, filetypes=[("Markdown files", "*.md")])
     if post_path:
-        with open(post_path, 'r') as file:
+        with open(post_path, 'r', encoding='utf-8') as file:  # Use UTF-8 encoding to support emojis
             content = file.read()
 
         front_matter, post_content = content.split('---', 2)[1:3]
@@ -283,7 +295,7 @@ def load_post():
                 image_listbox.insert(END, img)
 
         generate_button.config(text="Update Post")
-        generate_button.config(command=lambda: create_post(post_path, date=front_matter.get('date')))
+        generate_button.config(command=lambda: [create_post(post_path, date=front_matter.get('date'))])
 
 def create_post(output_path=None, date=None):
     active_config = get_active_profile_config()
@@ -293,6 +305,7 @@ def create_post(output_path=None, date=None):
     # Validate title
     if not validate_title(title):
         messagebox.showerror("Invalid Title", "Title contains invalid characters. Only alphanumeric characters, spaces, hyphens, and underscores are allowed.")
+        update_status(new_status="ERROR")
         return
 
     source_path = source_entry.get().strip()
@@ -349,7 +362,7 @@ def create_post(output_path=None, date=None):
 
     # Check if the featured image has changed and delete the original if necessary
     if output_path and os.path.exists(output_path):
-        with open(output_path, 'r') as file:
+        with open(output_path, 'r', encoding='utf-8') as file:  # Use UTF-8 encoding to support emojis
             existing_content = file.read()
         existing_front_matter, _ = existing_content.split('---', 2)[1:3]
         existing_front_matter = yaml.safe_load(existing_front_matter)
@@ -370,57 +383,127 @@ def create_post(output_path=None, date=None):
 
     generate_post(title, author, date, url, categories, tags, featured_image, additional_images, content, output_path)
 
+def clear_main_form_fields():
+    # Clear all fields on the main form
+    title_entry.delete(0, tk.END)
+    categories_entry.delete(0, tk.END)
+    tags_entry.delete(0, tk.END)
+    featuredImage_entry.delete(0, tk.END)
+    content_text.delete("1.0", tk.END)
+    image_listbox.delete(0, tk.END)
+    additional_images.clear()
+    # Reset the generate button
+    generate_button.config(text="Create Post", command=create_post)
+    update_status(new_status="NEW")
+
+def update_active_profile_label():
+    for widget in tk._default_root.children.values():
+      if isinstance(widget, tk.Label) and widget.cget("text").startswith("Active Profile:"):
+        widget.config(text=f"Active Profile: {config['active_profile']}")
+        break
+
+def update_remove_button_state(remove_button, listbox):
+    if listbox.curselection():
+        remove_button.pack(side=tk.LEFT, padx=5)
+    else:
+        remove_button.pack_forget()
+
+def update_status(new_status):
+    status_label.config(text=f"Status: {new_status}")
+
+def on_field_change(*args):
+    if status_label.cget("text") == "Status: POSTED":
+        update_status("EDITING")
 
 def main():
-    global title_entry, source_entry, categories_entry, tags_entry, featuredImage_entry, content_text, image_listbox, generate_button, additional_images
+    global title_entry, source_entry, categories_entry, tags_entry, featuredImage_entry, content_text, image_listbox, generate_button, additional_images, status_label
 
     root = tk.Tk()
     root.title("Blog Post Generator")
-    root.geometry("875x575")  # Set fixed size for the window
+    root.geometry("850x550")  # Set fixed size for the window
     root.resizable(False, False)  # Disable resizing
 
-    tk.Label(root, text="Title:").grid(row=0, column=0, sticky=tk.W)
-    title_entry = tk.Entry(root, width=50)
-    title_entry.grid(row=0, column=1, padx=10, pady=5)
-
-    tk.Label(root, text="Source Markdown File:").grid(row=1, column=0, sticky=tk.W)
-    source_entry = tk.Entry(root, width=50)
-    source_entry.grid(row=1, column=1, padx=10, pady=5)
-    tk.Button(root, text="Browse", command=lambda: select_source_file(source_entry)).grid(row=1, column=2, padx=10, pady=5)
-
-    tk.Label(root, text="Categories (comma separated):").grid(row=2, column=0, sticky=tk.W)
-    categories_entry = tk.Entry(root, width=50)
-    categories_entry.grid(row=2, column=1, padx=10, pady=5)
-
-    tk.Label(root, text="Tags (comma separated):").grid(row=3, column=0, sticky=tk.W)
-    tags_entry = tk.Entry(root, width=50)
-    tags_entry.grid(row=3, column=1, padx=10, pady=5)
-
-    tk.Label(root, text="Featured Image File:").grid(row=4, column=0, sticky=tk.W)
-    featuredImage_entry = tk.Entry(root, width=50)
-    featuredImage_entry.grid(row=4, column=1, padx=10, pady=5)
-    tk.Button(root, text="Browse", command=lambda: select_image_file(featuredImage_entry, additional_images, image_listbox)).grid(row=4, column=2, padx=10, pady=5)
-
-    tk.Label(root, text="Content:").grid(row=5, column=0, sticky=tk.W)
-    content_text = scrolledtext.ScrolledText(root, width=60, height=10)
-    content_text.grid(row=5, column=1, padx=10, pady=5)
-    tk.Button(root, text="Preview Markdown", command=lambda: preview_markdown(content_text)).grid(row=5, column=2, padx=10, pady=5)
-
+    # Initialize additional_images
     additional_images = []
-    tk.Button(root, text="Add Additional Image", command=lambda: select_image_file(tk.Entry(root, width=50), additional_images, image_listbox)).grid(row=6, column=1, padx=10, pady=10)
-    tk.Button(root, text="Remove Selected Image", command=lambda: remove_image(additional_images, image_listbox)).grid(row=6, column=2, padx=10, pady=10)
 
-    image_listbox = Listbox(root, selectmode=SINGLE, width=50, height=5)
-    image_listbox.grid(row=7, column=1, padx=10, pady=5)
+    # Top Frame for Active Profile and Load/Edit Button
+    top_frame = tk.Frame(root)
+    top_frame.grid(row=0, column=0, columnspan=3, padx=10, pady=5, sticky=tk.W)
 
-    tk.Button(root, text="Insert Image Reference", command=lambda: insert_image_reference(content_text, image_listbox)).grid(row=8, column=1, padx=10, pady=5)
+    active_profile_label = tk.Label(top_frame, text=f"Active Profile: {config['active_profile']}", anchor="center", font=("TkDefaultFont", 10, "bold"))
+    active_profile_label.pack(side=tk.LEFT, padx=5)
 
-    load_button = tk.Button(root, text="Load Post (.md)", command=load_post)
-    load_button.grid(row=9, column=1, padx=10, pady=10, sticky=tk.E)
-    generate_button = tk.Button(root, text="Generate Post", command=create_post)
-    generate_button.grid(row=9, column=2, padx=10, pady=10, sticky=tk.E)
+    load_button = tk.Button(top_frame, text="Load/Edit Post (.md)", command=lambda: [load_post(), update_status("EDITING")])
+    load_button.pack(side=tk.LEFT, padx=5)
 
-    tk.Button(root, text="Configure Settings", command=configure_settings).grid(row=9, column=0, padx=10, pady=10, sticky=tk.W)
+    # Status Label
+    status_label = tk.Label(top_frame, text="Status: NEW", anchor="center", font=("TkDefaultFont", 10, "bold"))
+    status_label.pack(side=tk.RIGHT, padx=5)
+
+    # Main Form Frame
+    form_frame = tk.Frame(root)
+    form_frame.grid(row=1, column=0, columnspan=3, padx=10, pady=5, sticky=tk.W)
+
+    # Title Section
+    tk.Label(form_frame, text="Blog Post Title*:").grid(row=0, column=0, sticky=tk.W)
+    title_entry = tk.Entry(form_frame, width=50)
+    title_entry.grid(row=0, column=1, padx=10, pady=5)
+    title_entry.bind("<KeyRelease>", on_field_change)
+
+    # Source Markdown File Section
+    tk.Label(form_frame, text="Populate from Markdown File:").grid(row=1, column=0, sticky=tk.W)
+    source_entry = tk.Entry(form_frame, width=50)
+    source_entry.grid(row=1, column=1, padx=10, pady=5)
+    source_entry.bind("<KeyRelease>", on_field_change)
+    tk.Button(form_frame, text="Browse for an .md file", command=lambda: [select_source_file(source_entry), on_field_change()]).grid(row=1, column=2, padx=10, pady=5)
+
+    # Categories Section
+    tk.Label(form_frame, text="Categories (comma separated)*:").grid(row=2, column=0, sticky=tk.W)
+    categories_entry = tk.Entry(form_frame, width=50)
+    categories_entry.grid(row=2, column=1, padx=10, pady=5)
+    categories_entry.bind("<KeyRelease>", on_field_change)
+
+    # Tags Section
+    tk.Label(form_frame, text="Tags (comma separated)*:").grid(row=3, column=0, sticky=tk.W)
+    tags_entry = tk.Entry(form_frame, width=50)
+    tags_entry.grid(row=3, column=1, padx=10, pady=5)
+    tags_entry.bind("<KeyRelease>", on_field_change)
+
+    # Featured Image Section
+    tk.Label(form_frame, text="Featured Image File*:").grid(row=4, column=0, sticky=tk.W)
+    featuredImage_entry = tk.Entry(form_frame, width=50)
+    featuredImage_entry.grid(row=4, column=1, padx=10, pady=5)
+    featuredImage_entry.bind("<KeyRelease>", on_field_change)
+    tk.Button(form_frame, text="Browse for an image", command=lambda: [select_image_file(featuredImage_entry, additional_images, image_listbox), on_field_change()]).grid(row=4, column=2, padx=10, pady=5)
+
+    # Content Section
+    tk.Label(form_frame, text="Content*:").grid(row=5, column=0, sticky=tk.W)
+    content_text = scrolledtext.ScrolledText(form_frame, width=60, height=10)
+    content_text.grid(row=5, column=1, padx=10, pady=5)
+    content_text.bind("<KeyRelease>", on_field_change)
+    tk.Button(form_frame, text="Preview Markdown", command=lambda: preview_markdown(content_text)).grid(row=5, column=2, padx=10, pady=5)
+
+    # Additional Images Section
+    additional_images_frame = tk.Frame(root)
+    additional_images_frame.grid(row=2, column=0, columnspan=3, padx=10, pady=5, sticky=tk.W)
+
+    tk.Button(additional_images_frame, text="Add Additional Image", command=lambda: [select_image_file(tk.Entry(root, width=50), additional_images, image_listbox), on_field_change()]).pack(side=tk.LEFT, padx=5)
+
+    remove_button = tk.Button(additional_images_frame, text="Remove Selected Image", command=lambda: [remove_image(additional_images, image_listbox), on_field_change()])
+    image_listbox = Listbox(additional_images_frame, selectmode=SINGLE, width=50, height=5)
+    image_listbox.pack(side=tk.LEFT, padx=10, pady=5)
+    image_listbox.bind("<<ListboxSelect>>", lambda event: update_remove_button_state(remove_button, image_listbox))
+
+    tk.Button(additional_images_frame, text="Insert Image Reference", command=lambda: [insert_image_reference(content_text, image_listbox), on_field_change()]).pack(side=tk.LEFT, padx=10, pady=5)
+
+    # Bottom Frame for Buttons
+    bottom_frame = tk.Frame(root)
+    bottom_frame.grid(row=3, column=0, columnspan=3, padx=10, pady=10, sticky=tk.W)
+
+    tk.Button(bottom_frame, text="Configure Settings", command=lambda: [configure_settings(), update_active_profile_label()]).pack(side=tk.LEFT, padx=10)
+    generate_button = tk.Button(bottom_frame, text="Create Post", command=lambda: [create_post()])
+    generate_button.pack(side=tk.RIGHT, padx=10)
+    tk.Button(bottom_frame, text="Clear Fields", command=clear_main_form_fields).pack(side=tk.RIGHT, padx=10)
 
     root.mainloop()
 
