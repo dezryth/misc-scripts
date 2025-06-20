@@ -2,6 +2,9 @@
 blog_post_generator_config.json
 config.ini
 
+# Ignore build artifacts
+build/
+
 # Ignore virtual environment
 .venv
 venv

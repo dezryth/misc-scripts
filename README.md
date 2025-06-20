@@ -24,3 +24,8 @@ source .venv/bin/activate
 ```
 pip install -r requirements.txt
 ```
+
+##Want to build Blog Post Generator?
+```
+pyinstaller --onefile blog_post_generator.py;
+```

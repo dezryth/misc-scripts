@@ -24,23 +24,29 @@ def load_config():
                         "type": "hugo",  # Default type can be 'hugo' or 'astro'
                         "author": "YourName",
                         "output_dir": "/Users/YourName/Repos/blog/content/post/",
-                        "image_dir": "/Users/YourName/Repos/blog/static/img/"
+                        "image_dir": "/Users/YourName/Repos/blog/static/img/",
+                        "relative_asset_path": "/img/"
                     }
                 }
                 config["active_profile"] = "Default"
             return config
     else:
-        return {
+        # Create a default config and save it to file
+        default_config = {
             "profiles": {
                 "Default": {
                     "type": "hugo",  # Default type can be 'hugo' or 'astro'
                     "author": "YourName",
                     "output_dir": "/Users/YourName/Repos/blog/content/post/",
-                    "image_dir": "/Users/YourName/Repos/blog/static/img/"
+                    "image_dir": "/Users/YourName/Repos/blog/static/img/",
+                    "relative_asset_path": "/img/"
                 }
             },
             "active_profile": "Default"
         }
+        with open(config_file_path, 'w') as f:
+            json.dump(default_config, f, indent=4)
+        return default_config
 
 # Save configuration to file
 def save_config(config):
