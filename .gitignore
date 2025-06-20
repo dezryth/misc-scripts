@@ -4,6 +4,7 @@ config.ini
 
 # Ignore virtual environment
 .venv
+venv
 
 
 .DS_Store

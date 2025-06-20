@@ -122,7 +122,7 @@ heroImage: ../../assets/{os.path.basename(featured_image)}
             with open(target_path, 'wb') as dest_file:
                 dest_file.write(src_file.read())
 
-    messagebox.showinfo("Success", f"Post created (or updated) at {output_path}")
+    messagebox.showinfo("Success", f"Post created (or updated) for {config["active_profile"]}")
     update_status("POSTED")
 
 def select_source_file(entry):
@@ -215,7 +215,7 @@ def configure_settings():
     profile_var = tk.StringVar(value=config["active_profile"])
     profile_dropdown = tk.OptionMenu(settings_window, profile_var, *config["profiles"].keys())
     profile_dropdown.grid(row=0, column=1, padx=10, pady=5)
-    profile_var.trace("w", update_fields)
+    profile_var.trace_add("write", lambda *args: update_fields())
 
     Label(settings_window, text="Type:").grid(row=1, column=0, sticky=tk.W, padx=10, pady=5)
     type_entry = Entry(settings_window, width=50)
@@ -420,7 +420,7 @@ def main():
 
     root = tk.Tk()
     root.title("Blog Post Generator")
-    root.geometry("850x550")  # Set fixed size for the window
+    root.geometry("875x550")  # Set fixed size for the window
     root.resizable(False, False)  # Disable resizing
 
     # Initialize additional_images
