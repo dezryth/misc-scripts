@@ -4,3 +4,7 @@ config.ini
 
 # Ignore virtual environment
 .venv
+
+
+.DS_Store
+Your Notes App/your_notes_config.json
